@@ -263,7 +263,7 @@
     async function triggerHaptic(style = 'impact') {
         if (window.plugins && window.plugins.Haptics) {
             try {
-                await window.plugins.Haptics Impact({ style: style === 'light' ? 0 : style === 'medium' ? 1 : 2 });
+                await window.plugins.Haptics.impact({ style: style === 'light' ? 0 : style === 'medium' ? 1 : 2 });
             } catch(e) {}
         }
         if (navigator.vibrate) {
