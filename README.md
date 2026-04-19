@@ -1,10 +1,10 @@
-# DeepFocus - Premium Pomodoro Timer App
+# DeepFocus - Premium Deep Work Timer App
 
-DeepFocus es una aplicación móvil de productividad basada en el método Pomodoro, diseñada con un estética premium y funcionalidades zero-backend.
+DeepFocus es una aplicación móvil de productividad basada en el método Deep Work de Cal Newport, diseñada con una estética premium y funcionalidades zero-backend.
 
 ## Funcionalidades
 
-- **Temporizador Pomodoro**: 3 bloques de trabajo de 90 min + 2 descansos
+- **Temporizador Deep Work**: 3 bloques de trabajo de 90 min + 2 descansos
 - **Estética Premium**: Gradiente 145deg, glassmorphism, sombras de profundidad
 - **Haptics**: Vibración táctil en alarmas de transición
 - **Wake Lock**: Pantalla siempre encendida durante sesiones
