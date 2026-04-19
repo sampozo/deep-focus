@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DeepFocus</string>
+    <string name="title_activity_main">DeepFocus</string>
+    <string name="package_name">com.sping.deepfocus</string>
+    <string name="custom_url_scheme">com.sping.deepfocus</string>
+</resources>
