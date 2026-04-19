@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover, maximum-scale=1.0, minimum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <title>DeepFocus v1.1.1 - SPIng 2026</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-black: #000000;
+            --focus-neon: #00ff41;
+            --break-yellow: #ffcc00;
+            --alert-red: #ff3b30;
+            --text-dim: #1a1a1a;
+            --safe-top: env(safe-area-inset-top, 0px);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-black);
+            color: #ffffff;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: calc(var(--safe-top) + 40px) 20px 60px 20px;
+            overflow: hidden;
+            overscroll-behavior: none;
+            -webkit-overflow-scrolling: touch;
+            touch-action: manipulation;
+            transition: background-color 0.4s ease;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: -1;
+            pointer-events: none;
+        }
+        #scroll-prevent {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            overflow: hidden;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        /* --- Animaciones de Alerta --- */
+        @keyframes panic {
+            0% { background-color: #450000; }
+            50% { background-color: var(--bg-black); }
+            100% { background-color: #450000; }
+        }
+        .panic-active { animation: panic 0.6s infinite; }
+
+        @keyframes flash-work {
+            0% { background-color: var(--focus-neon); color: #000; }
+            100% { background-color: var(--bg-black); }
+        }
+        .flash-work-active { animation: flash-work 1.5s ease-out infinite; }
+
+        @keyframes flash-break {
+            0% { background-color: var(--break-yellow); color: #000; }
+            100% { background-color: var(--bg-black); }
+        }
+        .flash-break-active { animation: flash-break 1.5s ease-out infinite; }
+
+        @keyframes breathe {
+            0% { opacity: 1; border-color: var(--break-yellow); box-shadow: 0 0 15px rgba(255, 204, 0, 0.2); }
+            50% { opacity: 0.4; border-color: #444; box-shadow: 0 0 0px rgba(0,0,0,0); }
+            100% { opacity: 1; border-color: var(--break-yellow); box-shadow: 0 0 15px rgba(255, 204, 0, 0.2); }
+        }
+        .pulse-active { animation: breathe 2s infinite ease-in-out; }
+
+        .header { text-align: center; }
+        .header h1 { font-weight: 600; letter-spacing: 12px; font-size: 32px; text-transform: uppercase; }
+        .sub-label { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--focus-neon); margin-top: 10px; letter-spacing: 2px; text-transform: uppercase; }
+
+        .timer-rect {
+            position: relative;
+            width: 100%;
+            max-width: 320px;
+            height: 160px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 3px solid var(--text-dim);
+            border-radius: 12px;
+            background: linear-gradient(145deg, #050505, #000000);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 20px rgba(255,255,255,0.02), inset 2px 2px 4px rgba(0,0,0,0.3), inset -1px -1px 2px rgba(255,255,255,0.02);
+            transition: border-color 0.8s ease;
+        }
+
+        .time-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 48px;
+            font-weight: 400;
+            letter-spacing: -1px;
+            z-index: 2;
+        }
+
+        .controls {
+            width: 100%;
+            max-width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn {
+            background: none;
+            border: 1px solid #222;
+            padding: 16px;
+            width: 100%;
+            border-radius: 4px;
+            color: #ffffff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn:disabled { opacity: 0.1; cursor: not-allowed; }
+        .btn-focus { border-color: var(--focus-neon); color: var(--focus-neon); }
+        .btn-abort { border-color: var(--alert-red); color: var(--alert-red); }
+
+        /* Estilo para SPIng 2026 */
+        .footer-brand {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: #555;
+            letter-spacing: 4px;
+            margin-top: 4px;
+        }
+
+        .progress-indicator { display: flex; gap: 15px; }
+        .dot { width: 4px; height: 4px; background: #222; border-radius: 50%; transition: 0.5s; }
+        .dot.active { background: var(--focus-neon); box-shadow: 0 0 8px var(--focus-neon); }
+
+        #final-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 100;
+            display: none; flex-direction: column;
+            justify-content: center; align-items: center;
+            text-align: center; padding: 40px;
+        }
+        #final-overlay h2 { font-weight: 600; letter-spacing: 4px; font-size: 24px; color: var(--focus-neon); margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+<div id="final-overlay">
+    <h2>DEEP WORK FINALIZADO</h2>
+    <p style="letter-spacing: 2px; color: #888; margin-bottom: 40px;">DESCANSA, TE LO MERECES</p>
+    <button class="btn btn-focus" style="width: 200px" onclick="location.reload()">SALIR</button>
+</div>
+
+<div id="scroll-prevent"></div>
+
+<div class="header">
+    <h1>DEEP FOCUS</h1>
+    <div id="step-info" class="sub-label">BLOQUE 1 (1:30 h)</div>
+</div>
+
+<div class="timer-rect" id="border-ui">
+    <div class="time-display" id="display">01:30:00</div>
+</div>
+
+<div class="controls">
+    <button class="btn btn-focus" id="main-btn" onclick="handleMainAction()">INICIAR PROTOCOLO</button>
+    <div class="btn-group">
+        <button class="btn" id="pause-btn" onclick="toggleEmergency()" disabled>PAUSA DE EMERGENCIA</button>
+        <span class="footer-brand">SPIng 2026</span>
+    </div>
+</div>
+
+<div class="progress-indicator">
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+</div>
+
+<script>
+    (function() {
+        let wakeLock = null;
+        let keepAliveInterval = null;
+        
+        async function requestWakeLock() {
+            if ('wakeLock' in navigator && !wakeLock) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => { wakeLock = null; });
+                } catch(e) { wakeLock = null; }
+            }
+        }
+        
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+        
+        function startKeepAlive(ctx) {
+            stopKeepAlive();
+            keepAliveInterval = setInterval(() => {
+                if (ctx.state === 'suspended') ctx.resume();
+            }, 4000);
+        }
+        
+        function stopKeepAlive() {
+            if (keepAliveInterval) {
+                clearInterval(keepAliveInterval);
+                keepAliveInterval = null;
+            }
+            releaseWakeLock();
+        }
+        
+        window._wakeLock = { request: requestWakeLock, release: releaseWakeLock, startKeepAlive, stopKeepAlive };
+    })();
+
+    const protocol = [
+        { label: "BLOQUE 1 (1:30 h)", time: 90 * 60, type: "work" },
+        { label: "DESCANSO (15 min)", time: 15 * 60, type: "break" },
+        { label: "BLOQUE 2 (1:30 h)", time: 90 * 60, type: "work" },
+        { label: "ALMUERZO (45 min)", time: 45 * 60, type: "break" },
+        { label: "BLOQUE 3 (1:30 h)", time: 90 * 60, type: "work" }
+    ];
+
+    let currentIdx = 0;
+    let timeLeft = protocol[0].time;
+    let timerId = null;
+    let pauseTimeLeft = 5 * 60;
+    let pauseTimerId = null;
+    let emergencyMode = false;
+    let alertActive = false;
+    let abortConfirmMode = false;
+    let abortTimeout = null;
+
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playTone(freq, type, dur, withHaptics = false) {
+        try {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + dur);
+            if (withHaptics && navigator.vibrate) {
+                navigator.vibrate(12);
+            }
+        } catch(e) {}
+    }
+
+    const display = document.getElementById('display');
+    const border = document.getElementById('border-ui');
+    const stepLabel = document.getElementById('step-info');
+    const mainBtn = document.getElementById('main-btn');
+    const pauseBtn = document.getElementById('pause-btn');
+
+    function format(s) {
+        const hrs = Math.floor(s / 3600);
+        const mins = Math.floor((s % 3600) / 60);
+        const secs = s % 60;
+        return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function updateUI() {
+        const item = protocol[currentIdx];
+        display.innerText = format(emergencyMode ? pauseTimeLeft : timeLeft);
+        stepLabel.innerText = item.label;
+        
+        if (item.type === 'break') {
+            stepLabel.style.color = 'var(--break-yellow)';
+            border.style.borderColor = 'var(--break-yellow)';
+            display.style.color = 'var(--break-yellow)';
+        } else {
+            stepLabel.style.color = 'var(--focus-neon)';
+            border.style.borderColor = (timerId || alertActive) ? 'var(--focus-neon)' : 'var(--text-dim)';
+            display.style.color = '#ffffff';
+        }
+        updateDots();
+    }
+
+async function triggerAlert(duration, type, withHaptics = false) {
+        alertActive = true;
+        const className = type === 'work' ? 'flash-work-active' : 'flash-break-active';
+        document.body.classList.add(className);
+        const interval = setInterval(() => {
+            playTone(type === 'work' ? 880 : 440, 'sine', 0.5, withHaptics);
+        }, 1000);
+
+        setTimeout(() => {
+            clearInterval(interval);
+            document.body.classList.remove(className);
+            alertActive = false;
+            updateUI();
+        }, duration);
+    }
+
+    function handleMainAction() {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (emergencyMode || alertActive) return;
+        
+        if (timerId) {
+            if (!abortConfirmMode) {
+                abortConfirmMode = true;
+                mainBtn.innerText = "¿ESTÁS SEGURO?";
+                mainBtn.style.backgroundColor = "rgba(255, 59, 48, 0.2)";
+                abortTimeout = setTimeout(resetAbortButton, 3000);
+            } else {
+                clearTimeout(abortTimeout);
+                abortProtocol();
+            }
+        } else {
+            pauseBtn.disabled = false;
+            startTimer();
+            triggerAlert(3000, 'work', true);
+        }
+    }
+
+    function resetAbortButton() {
+        abortConfirmMode = false;
+        if (timerId) {
+            mainBtn.innerText = "TERMINAR DEEP WORK";
+            mainBtn.style.backgroundColor = "transparent";
+        }
+    }
+
+    function startTimer() {
+        mainBtn.innerText = "TERMINAR DEEP WORK";
+        mainBtn.classList.replace('btn-focus', 'btn-abort');
+        if (timerId) clearInterval(timerId);
+        
+        if (window._wakeLock) {
+            window._wakeLock.request();
+            window._wakeLock.startKeepAlive(audioCtx);
+        }
+        
+        timerId = setInterval(() => {
+            timeLeft--;
+            updateUI();
+            if (timeLeft <= 0) handleCycleTransition();
+        }, 1000);
+    }
+
+    function handleCycleTransition() {
+        const finishedType = protocol[currentIdx].type;
+        triggerAlert(10000, finishedType, true);
+        currentIdx++;
+        if (currentIdx < protocol.length) {
+            timeLeft = protocol[currentIdx].time;
+            updateUI();
+            triggerAlert(3000, protocol[currentIdx].type, true);
+        } else {
+            clearInterval(timerId);
+            document.getElementById('final-overlay').style.display = 'flex';
+        }
+    }
+
+    function abortProtocol() {
+        clearInterval(timerId);
+        timerId = null;
+        currentIdx = 0;
+        timeLeft = protocol[0].time;
+        mainBtn.innerText = "INICIAR PROTOCOLO";
+        mainBtn.classList.replace('btn-abort', 'btn-focus');
+        mainBtn.style.backgroundColor = "transparent";
+        abortConfirmMode = false;
+        pauseBtn.disabled = true;
+        
+        if (window._wakeLock) {
+            window._wakeLock.stopKeepAlive();
+        }
+        
+        updateUI();
+    }
+
+    function toggleEmergency() {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (!emergencyMode) {
+            clearInterval(timerId); timerId = null;
+            emergencyMode = true;
+            pauseBtn.innerText = "PAUSA EN CURSO";
+            pauseBtn.classList.add('pulse-active');
+            pauseTimerId = setInterval(() => {
+                pauseTimeLeft--;
+                updateUI();
+                if (pauseTimeLeft <= 0) {
+                    document.body.classList.add('panic-active');
+                    playTone(200, 'sawtooth', 0.2, true);
+                }
+            }, 1000);
+        } else {
+            clearInterval(pauseTimerId); pauseTimerId = null;
+            emergencyMode = false;
+            pauseTimeLeft = 5 * 60;
+            document.body.classList.remove('panic-active');
+            pauseBtn.innerText = "PAUSA DE EMERGENCIA";
+            pauseBtn.classList.remove('pulse-active');
+            updateUI();
+            startTimer();
+        }
+    }
+
+    function updateDots() {
+        const dots = document.querySelectorAll('.dot');
+        dots.forEach((dot, index) => {
+            dot.classList.remove('active');
+            if (index === 0 && currentIdx >= 0) dot.classList.add('active');
+            if (index === 1 && currentIdx >= 2) dot.classList.add('active');
+            if (index === 2 && currentIdx >= 4) dot.classList.add('active');
+        });
+    }
+
+    updateUI();
+</script>
+</body>
+</html>

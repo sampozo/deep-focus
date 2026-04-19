@@ -1,0 +1,17 @@
+{
+  "appId": "com.sping.deepfocus",
+  "appName": "DeepFocus",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "ios": {
+    "scheme": "DeepFocus"
+  },
+  "android": {
+    "allowBackup": false
+  },
+  "plugins": {
+    "Haptics": {
+      "style": "impact"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+node_modules
+dist
+.gradle
+*.apk
+github.txt
+diseño.html
+.DS_Store
+.vscode
+.idea
+*.log
