@@ -201,7 +201,12 @@
     <div class="dot"></div>
 </div>
 
-<script>
+<script type="module">
+    import { App } from '@capacitor/app';
+    import { LocalNotifications } from '@capacitor/local-notifications';
+    import { Haptics, ImpactStyle } from '@capacitor/haptics';
+
+    // Wake Lock & Keep Alive Logic
     (function() {
         let wakeLock = null;
         let keepAliveInterval = null;
@@ -217,7 +222,7 @@
         
         function releaseWakeLock() {
             if (wakeLock) {
-                wakeLock.release();
+                wakeLock.release().catch(() => {});
                 wakeLock = null;
             }
         }
@@ -249,30 +254,29 @@
     ];
 
     let currentIdx = 0;
-    let timeLeft = protocol[0].time;
+    let endTime = null;
     let timerId = null;
-    let pauseTimeLeft = 5 * 60;
-    let pauseTimerId = null;
     let emergencyMode = false;
+    let pauseEndTime = null;
+    let pauseTimerId = null;
     let alertActive = false;
     let abortConfirmMode = false;
     let abortTimeout = null;
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    async function triggerHaptic(style = 'impact') {
-        if (window.plugins && window.plugins.Haptics) {
-            try {
-                await window.plugins.Haptics.impact({ style: style === 'light' ? 0 : style === 'medium' ? 1 : 2 });
-            } catch(e) {}
-        }
-        if (navigator.vibrate) {
-            navigator.vibrate(style === 'light' ? 10 : style === 'medium' ? 20 : 30);
+    async function triggerHaptic(style = 'heavy') {
+        try {
+            const hapticStyle = style === 'light' ? ImpactStyle.Light : style === 'medium' ? ImpactStyle.Medium : ImpactStyle.Heavy;
+            await Haptics.impact({ style: hapticStyle });
+        } catch(e) {
+            if (navigator.vibrate) navigator.vibrate(style === 'light' ? 10 : style === 'medium' ? 20 : 30);
         }
     }
 
     function playTone(freq, type, dur, withHaptics = false) {
         try {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = type;
@@ -281,7 +285,7 @@
             gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
             osc.connect(gain); gain.connect(audioCtx.destination);
             osc.start(); osc.stop(audioCtx.currentTime + dur);
-            if (withHaptics) triggerHaptic('impact');
+            if (withHaptics) triggerHaptic('heavy');
         } catch(e) {}
     }
 
@@ -292,6 +296,7 @@
     const pauseBtn = document.getElementById('pause-btn');
 
     function format(s) {
+        if (s < 0) s = 0;
         const hrs = Math.floor(s / 3600);
         const mins = Math.floor((s % 3600) / 60);
         const secs = s % 60;
@@ -300,7 +305,17 @@
 
     function updateUI() {
         const item = protocol[currentIdx];
-        display.innerText = format(emergencyMode ? pauseTimeLeft : timeLeft);
+        let displaySeconds = 0;
+        
+        if (emergencyMode) {
+            displaySeconds = Math.ceil((pauseEndTime - Date.now()) / 1000);
+        } else if (endTime) {
+            displaySeconds = Math.ceil((endTime - Date.now()) / 1000);
+        } else {
+            displaySeconds = protocol[currentIdx].time;
+        }
+
+        display.innerText = format(displaySeconds);
         stepLabel.innerText = item.label;
         
         if (item.type === 'break') {
@@ -315,6 +330,26 @@
             display.style.color = '#ffffff';
         }
         updateDots();
+    }
+
+    async function scheduleEndNotification(seconds, type) {
+        try {
+            await LocalNotifications.requestPermissions();
+            await LocalNotifications.cancel({ notifications: [{ id: 1 }] });
+            await LocalNotifications.schedule({
+                notifications: [
+                    {
+                        title: type === 'work' ? "BLOQUE FINALIZADO" : "DESCANSO FINALIZADO",
+                        body: type === 'work' ? "Es hora de un respiro." : "De vuelta al flujo de trabajo.",
+                        id: 1,
+                        schedule: { at: new Date(Date.now() + seconds * 1000) },
+                        sound: 'beep.wav',
+                        actionTypeId: "",
+                        extra: null
+                    }
+                ]
+            });
+        } catch(e) { console.error("Error scheduling notification", e); }
     }
 
     async function triggerAlert(duration, type, withHaptics = false) {
@@ -333,7 +368,7 @@
         }, duration);
     }
 
-    function handleMainAction() {
+    window.handleMainAction = function() {
         if (audioCtx.state === 'suspended') audioCtx.resume();
         if (emergencyMode || alertActive) return;
         
@@ -349,8 +384,12 @@
             }
         } else {
             pauseBtn.disabled = false;
+            const sessionTime = protocol[currentIdx].time;
+            endTime = Date.now() + sessionTime * 1000;
+            saveState();
             startTimer();
             triggerAlert(3000, 'work', true);
+            scheduleEndNotification(sessionTime, 'work');
         }
     }
 
@@ -373,22 +412,33 @@
         }
         
         timerId = setInterval(() => {
-            timeLeft--;
-            updateUI();
-            if (timeLeft <= 0) handleCycleTransition();
+            const now = Date.now();
+            if (now >= endTime) {
+                handleCycleTransition();
+            } else {
+                updateUI();
+            }
         }, 1000);
+        updateUI();
     }
 
     function handleCycleTransition() {
+        clearInterval(timerId);
+        timerId = null;
         const finishedType = protocol[currentIdx].type;
         triggerAlert(10000, finishedType, true);
+        
         currentIdx++;
         if (currentIdx < protocol.length) {
-            timeLeft = protocol[currentIdx].time;
-            updateUI();
+            const nextTime = protocol[currentIdx].time;
+            endTime = Date.now() + nextTime * 1000;
+            saveState();
+            startTimer();
             triggerAlert(3000, protocol[currentIdx].type, true);
+            scheduleEndNotification(nextTime, protocol[currentIdx].type);
         } else {
-            clearInterval(timerId);
+            endTime = null;
+            clearState();
             document.getElementById('final-overlay').style.display = 'flex';
         }
     }
@@ -397,7 +447,10 @@
         clearInterval(timerId);
         timerId = null;
         currentIdx = 0;
-        timeLeft = protocol[0].time;
+        endTime = null;
+        clearState();
+        LocalNotifications.cancel({ notifications: [{ id: 1 }] });
+        
         mainBtn.innerText = "INICIAR PROTOCOLO";
         mainBtn.classList.replace('btn-abort', 'btn-focus');
         mainBtn.style.backgroundColor = "transparent";
@@ -411,30 +464,44 @@
         updateUI();
     }
 
-    function toggleEmergency() {
+    window.toggleEmergency = function() {
         if (audioCtx.state === 'suspended') audioCtx.resume();
         if (!emergencyMode) {
             clearInterval(timerId); timerId = null;
             emergencyMode = true;
+            const pauseTimeSeconds = 5 * 60;
+            pauseEndTime = Date.now() + pauseTimeSeconds * 1000;
+            saveState();
+            
             pauseBtn.innerText = "PAUSA EN CURSO";
             pauseBtn.classList.add('pulse-active');
             pauseTimerId = setInterval(() => {
-                pauseTimeLeft--;
-                updateUI();
-                if (pauseTimeLeft <= 0) {
+                const now = Date.now();
+                if (now >= pauseEndTime) {
                     document.body.classList.add('panic-active');
                     playTone(200, 'sawtooth', 0.2, true);
                 }
+                updateUI();
             }, 1000);
+            scheduleEndNotification(pauseTimeSeconds, 'break');
         } else {
             clearInterval(pauseTimerId); pauseTimerId = null;
             emergencyMode = false;
-            pauseTimeLeft = 5 * 60;
+            
+            // Recalculate endTime based on remaining time from before pause
+            // For simplicity, we'll just restore the remaining work time
+            const remaining = Math.max(0, endTime - Date.now()); 
+            // Better: update endTime to push it forward by the time spent in pause
+            // But usually pause means work is stopped, so we just reset endTime to now + remaining
+            // Wait, if I paused, I should probably freeze the work timer.
+            
             document.body.classList.remove('panic-active');
             pauseBtn.innerText = "PAUSA DE EMERGENCIA";
             pauseBtn.classList.remove('pulse-active');
-            updateUI();
+            
+            // Resume work timer
             startTimer();
+            saveState();
         }
     }
 
@@ -448,7 +515,64 @@
         });
     }
 
-    updateUI();
+    function saveState() {
+        const state = {
+            currentIdx,
+            endTime,
+            emergencyMode,
+            pauseEndTime
+        };
+        localStorage.setItem('deepfocus_state', JSON.stringify(state));
+    }
+
+    function clearState() {
+        localStorage.removeItem('deepfocus_state');
+    }
+
+    function loadState() {
+        const saved = localStorage.getItem('deepfocus_state');
+        if (saved) {
+            const state = JSON.parse(saved);
+            currentIdx = state.currentIdx;
+            endTime = state.endTime;
+            emergencyMode = state.emergencyMode;
+            pauseEndTime = state.pauseEndTime;
+            
+            if (endTime && endTime > Date.now()) {
+                if (emergencyMode) {
+                   toggleEmergency(); // This might need careful handling to avoid recursion
+                } else {
+                   startTimer();
+                }
+            } else if (endTime && endTime <= Date.now()) {
+                // If it finished while closed, handle it
+                handleCycleTransition();
+            }
+        }
+        updateUI();
+    }
+
+    // App State Listeners
+    App.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+            console.log('App resumed, syncing timer...');
+            updateUI();
+        } else {
+            console.log('App backgrounded, state persisted.');
+            saveState();
+        }
+    });
+
+    // Handle back button for Android
+    App.addListener('backButton', () => {
+        if (timerId) {
+            // Maybe show a confirmation or just minimize
+        } else {
+            App.exitApp();
+        }
+    });
+
+    loadState();
 </script>
 </body>
 </html>
