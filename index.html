@@ -206,44 +206,40 @@
     import { LocalNotifications } from '@capacitor/local-notifications';
     import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
-    // Wake Lock & Keep Alive Logic
-    (function() {
-        let wakeLock = null;
-        let keepAliveInterval = null;
-        
-        async function requestWakeLock() {
-            if ('wakeLock' in navigator && !wakeLock) {
-                try {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    wakeLock.addEventListener('release', () => { wakeLock = null; });
-                } catch(e) { wakeLock = null; }
+    import { KeepAwake } from '@capacitor-community/keep-awake';
+
+    // Keep Awake Logic with Launch Prompt
+    (async function initKeepAwake() {
+        const savedPref = localStorage.getItem('keep_awake_pref');
+        let shouldKeepAwake = savedPref === 'true';
+
+        if (savedPref === null) {
+            shouldKeepAwake = confirm("¿Deseas mantener la pantalla siempre encendida durante tus sesiones de Deep Work?");
+            localStorage.setItem('keep_awake_pref', shouldKeepAwake);
+        }
+
+        if (shouldKeepAwake) {
+            try {
+                await KeepAwake.keepAwake();
+                console.log("Keep Awake activated");
+            } catch (e) {
+                console.error("Keep Awake failed", e);
             }
         }
-        
-        function releaseWakeLock() {
-            if (wakeLock) {
-                wakeLock.release().catch(() => {});
-                wakeLock = null;
-            }
-        }
-        
-        function startKeepAlive(ctx) {
-            stopKeepAlive();
-            keepAliveInterval = setInterval(() => {
-                if (ctx.state === 'suspended') ctx.resume();
-            }, 4000);
-        }
-        
-        function stopKeepAlive() {
-            if (keepAliveInterval) {
-                clearInterval(keepAliveInterval);
-                keepAliveInterval = null;
-            }
-            releaseWakeLock();
-        }
-        
-        window._wakeLock = { request: requestWakeLock, release: releaseWakeLock, startKeepAlive, stopKeepAlive };
+
+        window._keepAwake = {
+            toggle: async () => {
+                const current = localStorage.getItem('keep_awake_pref') === 'true';
+                const newState = !current;
+                localStorage.setItem('keep_awake_pref', newState);
+                if (newState) await KeepAwake.keepAwake();
+                else await KeepAwake.allowSleep();
+                return newState;
+            },
+            status: () => localStorage.getItem('keep_awake_pref') === 'true'
+        };
     })();
+
 
     const protocol = [
         { label: "BLOQUE 1 (1:30 h)", time: 90 * 60, type: "work" },
@@ -406,10 +402,8 @@
         mainBtn.classList.replace('btn-focus', 'btn-abort');
         if (timerId) clearInterval(timerId);
         
-        if (window._wakeLock) {
-            window._wakeLock.request();
-            window._wakeLock.startKeepAlive(audioCtx);
-        }
+        // Keep Awake is handled globally by the plugin initialization
+
         
         timerId = setInterval(() => {
             const now = Date.now();
@@ -457,9 +451,8 @@
         abortConfirmMode = false;
         pauseBtn.disabled = true;
         
-        if (window._wakeLock) {
-            window._wakeLock.stopKeepAlive();
-        }
+        // Keep Awake state is preserved globally
+
         
         updateUI();
     }
