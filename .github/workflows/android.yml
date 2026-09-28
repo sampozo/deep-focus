@@ -25,12 +25,12 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+          packages: 'platform-tools platforms;android-34 platforms;android-35 build-tools;34.0.0 build-tools;35.0.0'
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
@@ -70,6 +70,13 @@ jobs:
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           JAVA_HOME: ${{ env.JAVA_HOME }}
+
+      - name: Print Gradle error log on failure
+        if: failure()
+        run: |
+          echo "==================== GRADLE ERROR LOG ===================="
+          tail -n 120 android/gradle-output.log || cat android/gradle-output.log
+          echo "=========================================================="
 
       - name: List build outputs
         if: always()
