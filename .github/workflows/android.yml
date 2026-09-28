@@ -21,46 +21,49 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Android SDK
-        uses: android-actions/setup-android@v2
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
 
       - name: Build web assets
         run: npm run build
 
-      - name: Sync Capacitor
-        run: npx capacitor sync android
+      - name: Sync Capacitor to Android
+        run: npx cap sync android
 
       - name: Build debug APK
+        working-directory: android
         run: |
-          cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
         env:
-          keystore: ${{ secrets.KEYSTORE }}
-          keystore_password: ${{ secrets.KEYSTORE_PASSWORD }}
-          key_alias: ${{ secrets.KEY_ALIAS }}
-          key_password: ${{ secrets.KEY_PASSWORD }}
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
       - name: Upload APK artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: DeepFocus-debug.apk
+          name: DeepFocus-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
 
-      - name: Upload to Release
-        if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v1
+      - name: Create Release with APK
+        if: success() && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
         with:
           files: android/app/build/outputs/apk/debug/app-debug.apk
           tag_name: v${{ github.run_number }}
+          name: "DeepFocus v${{ github.run_number }}"
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
