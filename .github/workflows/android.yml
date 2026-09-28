@@ -74,9 +74,13 @@ jobs:
       - name: Print Gradle error log on failure
         if: failure()
         run: |
-          echo "==================== GRADLE ERROR LOG ===================="
-          tail -n 120 android/gradle-output.log || cat android/gradle-output.log
-          echo "=========================================================="
+          echo "==================== GRADLE ERROR LOG (FULL) ===================="
+          cat android/gradle-output.log || true
+          echo "=================================================================="
+          echo "## Gradle Build Failure Log" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 200 android/gradle-output.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: List build outputs
         if: always()
@@ -93,6 +97,17 @@ jobs:
           name: gradle-build-log
           path: android/gradle-output.log
           retention-days: 7
+
+      - name: Create Failure Release with Log
+        if: failure() && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/gradle-output.log
+          tag_name: build-failure-v${{ github.run_number }}
+          name: "Build Failure Log v${{ github.run_number }}"
+          body_path: android/gradle-output.log
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload APK artifact
         if: success()
